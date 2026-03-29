@@ -89,6 +89,37 @@ toward mazes where the solution is non-trivially obfuscated.
 
 ---
 
+## 5a. Fitness Function — Branchiness (Design Discussion)
+
+**Issue raised by Robin (2026-03-28):** BFS distance alone produces mazes where the
+optimal individual is a Hamiltonian path — a single winding corridor visiting every cell
+with no branches and no dead ends. Technically hard (long solution path) but visually
+boring and arguably not "maze-like."
+
+**Resolution: retain BFS distance for Batch 1; track dead-end density as secondary metric.**
+
+Reasoning:
+- A Hamiltonian path IS a valid hard maze — the longest possible non-backtracking solution.
+  Whether it's aesthetically satisfying is separate from whether it's hard to solve blind.
+- For the topology comparison experiment, what matters is that the fitness landscape is
+  consistent across topologies so diversity differences are attributable to migration structure,
+  not fitness function interactions.
+- Adding a branchiness component changes the fitness landscape and makes the signal harder
+  to interpret in Batch 1.
+
+**Proposed multi-component fitness for Batch 2 (exploration):**
+
+```
+f(maze) = α * path_length/N²  +  β * dead_ends/N
+```
+
+where `dead_ends` = number of cells with degree 1 in the spanning tree (exactly one passage).
+Typical values: α=0.7, β=0.3. Record as a design variation once Batch 1 results are in.
+
+**Date:** 2026-03-28
+
+---
+
 ## 6. Crossover Operator
 
 **Decision:** Order Crossover (OX) on permutations

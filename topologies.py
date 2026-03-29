@@ -66,6 +66,29 @@ def random_regular(n, k, seed=42):
     return nx.to_numpy_array(G, dtype=float)
 
 
+def barbell(n):
+    """
+    Barbell graph: two complete graphs K_{n//2} connected by a single bridge edge.
+    Node (n//2 - 1) and node (n//2) are the bridge nodes.
+    lambda_2 ≈ 0.07 for n=8 (very low — strong bottleneck between two cliques).
+    """
+    half = n // 2
+    # nx.barbell_graph(m1, 0): two K_m1 connected directly by a bridge edge
+    G = nx.barbell_graph(half, 0)
+    return nx.to_numpy_array(G, dtype=float)
+
+
+def watts_strogatz(n, k=4, p=0.3, seed=42):
+    """
+    Watts-Strogatz small-world graph.
+    Start with ring lattice of degree k (each node connected to k/2 neighbors on each side),
+    then rewire each edge with probability p.
+    lambda_2 ≈ 1.5 for n=8, k=4, p=0.3 (between hypercube and star).
+    """
+    G = nx.watts_strogatz_graph(n, k, p, seed=seed)
+    return nx.to_numpy_array(G, dtype=float)
+
+
 # ---------------------------------------------------------------------------
 # Symmetric cubic graphs from the Foster census (fixed size)
 # ---------------------------------------------------------------------------
@@ -140,6 +163,10 @@ def all_topologies():
         entries.append((f"hypercube(k={k})", hypercube(k),            f"Q_{k}, n=2^{k}={2**k}"))
     for n, k_deg in [(8, 3), (16, 3), (20, 3)]:
         entries.append((f"rand_reg(n={n},k={k_deg})", random_regular(n, k_deg), "random 3-regular"))
+    for n in [8, 10, 16, 20]:
+        entries.append((f"barbell(n={n})",   barbell(n),              "two K_{n/2} + bridge, low lambda_2"))
+    for n in [8, 10, 16, 20]:
+        entries.append((f"ws(n={n},k=4,p=0.3)", watts_strogatz(n),   "Watts-Strogatz small-world"))
 
     # Foster census cubic graphs
     entries.append(("cube",          cube(),          "Q_3, n=8, cubic"))
