@@ -99,42 +99,95 @@ Genome [e5, e0, e12, e3, ...] means:
 
 ## What Are We Optimizing?
 
-**Fitness function:** Length of the shortest path from the **top-left corner (0,0)**
-to the **bottom-right corner (N-1, N-1)**, normalized by N².
+**Fitness function:** A composite of three maze quality metrics.
 
 ```
-f(maze) = BFS_distance((0,0), (N-1,N-1)) / N²
+f(maze) = 0.5 * path_length/N²  +  0.3 * dead_end_density  +  0.2 * junction_density
 ```
+
+Where:
+- `path_length` = BFS distance from (0,0) to (N-1,N-1)
+- `dead_end_density` = fraction of cells with degree 1 (one passage, no branches)
+- `junction_density` = fraction of cells with degree ≥ 3 (branching points)
 
 **Higher fitness = more complex, harder maze.**
 
-In a perfect maze every cell pair has exactly one path. A longer solution path means:
-- More winding route from start to finish
-- More dead-ends branching off the critical path
-- A harder puzzle for a human or agent to solve
+**Why the composite?**
+
+Pure path-length fitness has a degenerate optimum: the fitness-maximising maze is a
+single space-filling Hamiltonian path from start to finish — one long winding corridor
+with no branches at all. A human solver would find it trivially easy once they realise
+there are no dead ends.
+
+A proper maze needs all three components:
+
+| Component | What it captures | Without it |
+|-----------|------------------|------------|
+| Path length | Solution is long/winding | Short, direct path wins |
+| Dead-end density | Many false branches to explore | Single-corridor degeneracy |
+| Junction density | Complex decision points | Linear chains dominate |
+
+In a spanning tree on N² nodes, the three components are related but not redundant:
+a maze can have a long solution path while having very few junctions (e.g., a spiral).
+Adding junction weight prevents the spiral/space-fill degenerate case.
+
+**Computing the components:**
 
 ```
-Low-fitness maze (f ≈ 0.2):          High-fitness maze (f ≈ 0.8):
+path_length  = BFS distance (0,0) → (N-1,N-1)     [O(N²)]
+dead_ends    = count of cells with degree 1         [O(N²)]
+junctions    = count of cells with degree ≥ 3       [O(N²)]
 
-+--+--+--+--+                        +--+--+--+--+
-|S          |                        |S  |        |
-+  +--+--+  +                        +  +  +--+  +
-|  |        |                        |     |  |  |
-+  +  +--+--+                        +--+--+  +  +
-|     |     |                        |        |  |
-+--+  +  +--+                        +  +--+--+  +
-|        |G |                        |  |      G |
-+--+--+--+--+                        +--+--+--+--+
-
-Path: S→down→down→right→right→G     Path: S→down→right→right→up→up
-      (length 5 / 16 ≈ 0.3)               →right→down→down→down→G
-                                           (length 10 / 16 ≈ 0.6)
+dead_end_density  = dead_ends  / N²
+junction_density  = junctions  / N²
 ```
+
+Cell degree = number of passages (removed walls) connecting it to neighbours.
+
+```
+Low-fitness maze:               High-fitness maze:
+
++--+--+--+--+                   +--+--+--+--+
+|S           |                  |S  |        |
++  +--+--+   +                  +  +  +--+  +
+|  |         |                  |     |  |  |
++  +  +--+--+                   +--+--+  +  +
+|     |      |                  |        |  |
++--+  +  +--+                   +  +--+--+  +
+|         |G |                  |  |      G |
++--+--+--+--+                   +--+--+--+--+
+
+Few dead ends, few junctions     Many dead ends, many junctions
+→ low dead_end + junction score  → high composite score
+```
+
+**Why these weights (0.5 / 0.3 / 0.2)?**
+
+Path length is the most direct measure of difficulty. Dead-end density is the
+primary guard against the degenerate single-corridor case. Junction density is a
+secondary guard. Equal weighting would over-reward mazes with many tiny dead-end
+stubs at the cost of solution length. These weights can be tuned if early results
+suggest the degenerate case persists.
+
+**Haskell implementation note for Lyra:**
+
+```haskell
+fitness :: Maze -> Double
+fitness (Maze perm) =
+  let tree   = kruskalDecode perm
+      path   = fromIntegral (bfsLength tree) / fromIntegral (n*n)
+      degs   = V.map (degree tree) (V.fromList [0..n*n-1])
+      deadEnds   = fromIntegral (V.length (V.filter (== 1) degs)) / fromIntegral (n*n)
+      junctions  = fromIntegral (V.length (V.filter (>= 3) degs)) / fromIntegral (n*n)
+  in  0.5 * path + 0.3 * deadEnds + 0.2 * junctions
+```
+
+**Evaluation cost:** still O(N²) — one BFS pass + one degree scan. Negligible.
 
 **Why this fitness function?**
-- BFS is O(N²) — negligibly fast, allows large populations
-- Has many local optima (near-diameter spanning trees)
-- Premature convergence is a real failure mode — good test for diversity preservation
+- Guards against the degenerate single-corridor optimum
+- All three components have many local optima — good test for diversity preservation
+- Evaluation remains fast; the simulation cost is still dominated by generation count
 
 ---
 
