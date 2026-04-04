@@ -203,10 +203,12 @@ instance Domain Maze where
         perm' = swapVec perm i j
     in (Maze perm', gen2)
 
-  distance (Maze p1) (Maze p2) =
-    let len = VU.length p1
-        diffs = VU.sum $ VU.zipWith (\a b -> if a /= b then (1 :: Int) else 0) p1 p2
-    in fromIntegral diffs / fromIntegral len
+  distance m1 m2 =
+    let t1 = decodeMaze m1
+        t2 = decodeMaze m2
+        inter = IS.size (IS.intersection t1 t2)
+        union_ = IS.size (IS.union t1 t2)
+    in 1.0 - fromIntegral inter / fromIntegral union_
 
 -- ---------------------------------------------------------------------------
 -- Order Crossover (OX)
