@@ -1,7 +1,8 @@
 module Main where
 
 import IslandGA (Topology, Stats(..), runSimulation)
-import Maze (Maze)  -- import Domain instance for Maze
+import Maze (Maze)      -- import Domain instance for Maze
+import Sudoku (Sudoku)  -- import Domain instance for Sudoku
 import Domain (Domain(..))
 
 import qualified Data.Vector as V
@@ -162,11 +163,54 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [topoName, nIslandsStr, popSizeStr, migIntervalStr, nMigrantsStr, totalGensStr, seedStr] -> do
-      let numIslands   = read nIslandsStr   :: Int
-          popSize      = read popSizeStr    :: Int
+    [domainName, topoName, nIslandsStr, popSizeStr, migIntervalStr, nMigrantsStr, totalGensStr, seedStr] -> do
+      let numIslands   = read nIslandsStr    :: Int
+          popSize      = read popSizeStr     :: Int
           migInterval  = read migIntervalStr :: Int
-          nMigrants    = read nMigrantsStr  :: Int
+          nMigrants    = read nMigrantsStr   :: Int
+          totalGens    = read totalGensStr   :: Int
+          seed         = read seedStr        :: Int
+          gen          = mkStdGen seed
+          topo         = buildTopology topoName numIslands
+
+      hPutStrLn stderr $ "Running: domain=" ++ domainName
+                      ++ " | topo=" ++ topoName
+                      ++ " | islands=" ++ show numIslands
+                      ++ " | pop=" ++ show popSize
+                      ++ " | migInterval=" ++ show migInterval
+                      ++ " | migrants=" ++ show nMigrants
+                      ++ " | gens=" ++ show totalGens
+                      ++ " | seed=" ++ show seed
+
+      -- Print CSV header
+      putStrLn "generation,meanFitness,bestFitness,diversity"
+
+      let printStats stats =
+            mapM_ (\s -> do
+              putStrLn $ show (generation s)
+                    ++ "," ++ show (meanFitness s)
+                    ++ "," ++ show (bestFitness s)
+                    ++ "," ++ show (diversity s)
+              hFlush stdout
+              ) stats
+
+      case domainName of
+        "maze" -> do
+          let stats = runSimulation (Proxy :: Proxy Maze) popSize migInterval nMigrants totalGens topo numIslands gen
+          printStats stats
+        "sudoku" -> do
+          let stats = runSimulation (Proxy :: Proxy Sudoku) popSize migInterval nMigrants totalGens topo numIslands gen
+          printStats stats
+        _ -> hPutStrLn stderr $ "Unknown domain: " ++ domainName ++ " (choose maze or sudoku)"
+
+      hPutStrLn stderr "Done."
+
+    -- Backward-compatible: if 7 args given, assume maze domain
+    [topoName, nIslandsStr, popSizeStr, migIntervalStr, nMigrantsStr, totalGensStr, seedStr] -> do
+      let numIslands   = read nIslandsStr    :: Int
+          popSize      = read popSizeStr     :: Int
+          migInterval  = read migIntervalStr :: Int
+          nMigrants    = read nMigrantsStr   :: Int
           totalGens    = read totalGensStr   :: Int
           seed         = read seedStr        :: Int
           gen          = mkStdGen seed
@@ -180,13 +224,9 @@ main = do
                       ++ " | gens=" ++ show totalGens
                       ++ " | seed=" ++ show seed
 
-      -- Print CSV header
       putStrLn "generation,meanFitness,bestFitness,diversity"
 
-      -- Run simulation (Maze domain)
       let stats = runSimulation (Proxy :: Proxy Maze) popSize migInterval nMigrants totalGens topo numIslands gen
-
-      -- Print each stats row
       mapM_ (\s -> do
         putStrLn $ show (generation s)
               ++ "," ++ show (meanFitness s)
@@ -198,9 +238,11 @@ main = do
       hPutStrLn stderr "Done."
 
     _ -> do
-      hPutStrLn stderr "Usage: topology-sim <topology-name> <num-islands> <pop-size> <migration-interval> <num-migrants> <total-generations> <seed>"
+      hPutStrLn stderr "Usage: topology-sim <domain> <topology-name> <num-islands> <pop-size> <migration-interval> <num-migrants> <total-generations> <seed>"
       hPutStrLn stderr ""
+      hPutStrLn stderr "Domains: maze, sudoku"
       hPutStrLn stderr "Topologies: disconnected, ring, star, complete, hypercube, barbell, watts-strogatz, random-regular"
       hPutStrLn stderr ""
       hPutStrLn stderr "Example:"
-      hPutStrLn stderr "  topology-sim ring 8 50 10 5 500 42"
+      hPutStrLn stderr "  topology-sim sudoku ring 8 50 10 5 500 42"
+      hPutStrLn stderr "  topology-sim maze ring 8 50 10 5 500 42   (or legacy 7-arg form)"
