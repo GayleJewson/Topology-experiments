@@ -45,22 +45,30 @@ hypercube k =
 -- Nodes 0..half-1 form clique 1, nodes half..n-1 form clique 2.
 -- Node (half-1) and node half are the bridge.
 barbell :: Int -> Topology
-barbell n =
+barbell n = barbellBridge n 1
+
+-- | Parameterized barbell: two cliques of n/2 with b cross-clique edges.
+-- Cross-edges are added in order of Manhattan distance from the classic
+-- bridge point (half-1, half), fanning out symmetrically.
+-- b=1 is the classic barbell; b=half^2 is the complete graph.
+barbellBridge :: Int -> Int -> Topology
+barbellBridge n b =
   let half = n `div` 2
+      -- Cross-clique edges ordered by Manhattan distance from classic bridge.
+      -- Distance d = (half-1-i) + (j-half) for i in clique 1, j in clique 2.
+      edgesAtDist d = [(i, j) | i <- [0..half-1], j <- [half..n-1],
+                                 (half - 1 - i) + (j - half) == d]
+      allCross = concatMap edgesAtDist [0 .. 2*(half-1)]
+      bridges  = take (min b (half * half)) allCross
+      -- Neighbors of node i across the bridge
+      bridgeNeighbors i
+        | i < half  = [j | (a, j) <- bridges, a == i]
+        | otherwise = [a | (a, j) <- bridges, j == i]
   in V.generate n (\i ->
-       if i < half
-         then
-           -- Clique 1: connected to all other clique-1 nodes
-           let clique = [j | j <- [0 .. half - 1], j /= i]
-           in if i == half - 1
-                then half : clique  -- bridge node
-                else clique
-         else
-           -- Clique 2: connected to all other clique-2 nodes
-           let clique = [j | j <- [half .. n - 1], j /= i]
-           in if i == half
-                then (half - 1) : clique  -- bridge node
-                else clique
+       let intra
+             | i < half  = [j | j <- [0..half-1], j /= i]
+             | otherwise = [j | j <- [half..n-1], j /= i]
+       in intra ++ bridgeNeighbors i
      )
 
 -- | Watts-Strogatz small-world graph.
@@ -151,6 +159,12 @@ buildTopology name n = case name of
   "complete"        -> complete n
   "hypercube"       -> hypercube 3  -- k=3 for 8 islands
   "barbell"         -> barbell n
+  "barbell-1"       -> barbellBridge n 1
+  "barbell-2"       -> barbellBridge n 2
+  "barbell-4"       -> barbellBridge n 4
+  "barbell-8"       -> barbellBridge n 8
+  "barbell-12"      -> barbellBridge n 12
+  "barbell-16"      -> barbellBridge n 16
   "watts-strogatz"  -> wattsStrogatz n 4 0.3 42
   "random-regular"  -> randomRegular n 3 42
   _                 -> error $ "Unknown topology: " ++ name
